@@ -56,6 +56,18 @@ class UserService {
       throw error;
     }
   }
+
+  async getAllUsersAdmin() {
+    try {
+      const users = await User.find();
+      if (!users || users.length === 0) {
+        throw new Error('No se encontraron usuarios en la base de datos.');
+      }
+      return users;
+    } catch (error) {
+      throw new Error(`Error al obtener los usuarios: ${error.message}`);
+    }
+  }
 }
 
 module.exports = new UserService();

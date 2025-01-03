@@ -44,6 +44,19 @@ class UserController {
       next(error);
     }
   }
+
+  async getAllUsersAdmin(req, res, next) {
+    if (req.user) {
+      try {
+        const users = await userService.getAllUsersAdmin();
+        return res.status(200).json(users);
+      } catch (error) {
+        next(error);
+      }
+    } else {
+      res.status(500).send({ data: undefined, message: 'ErrorToken' });
+    }
+  }
 }
 
 module.exports = new UserController();

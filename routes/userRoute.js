@@ -13,4 +13,11 @@ router.post(
 );
 router.post('/users/login', userController.loginUser); // Ruta: /api/users/login
 
+// GET
+router.get(
+  '/users/get_all_users_admin',
+  authenticate.decodeToken,
+  userController.getAllUsersAdmin
+);
+
 module.exports = router;
