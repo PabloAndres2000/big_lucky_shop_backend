@@ -20,4 +20,16 @@ router.get(
   userController.getAllUsersAdmin
 );
 
+router.get(
+  '/users/get_user_by_id/:id',
+  authenticate.decodeToken,
+  userController.getUserById
+);
+
+// PUT
+router.put(
+  '/users/update_user_by_id/:id',
+  authenticate.decodeToken,
+  userController.updateUserById
+);
 module.exports = router;

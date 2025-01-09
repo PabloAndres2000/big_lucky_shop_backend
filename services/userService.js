@@ -2,6 +2,7 @@ const TokenService = require('../helpers/jwt');
 const { User } = require('../models/User/userModel');
 const bcrypt = require('bcrypt-nodejs');
 const { NotFoundError } = require('../middlewares/errors');
+const mongoose = require('mongoose');
 
 class UserService {
   async createUserAdmin(data) {
@@ -57,15 +58,63 @@ class UserService {
     }
   }
 
-  async getAllUsersAdmin() {
+  async getAllUsersAdmin(filter = '') {
     try {
-      const users = await User.find();
+      const regex = new RegExp(filter, 'i');
+      const users = await User.find({
+        $or: [
+          { name: { $regex: regex } },
+          { last_name: { $regex: regex } },
+          { email: { $regex: regex } },
+        ],
+      }).select('-password');
+
       if (!users || users.length === 0) {
         throw new Error('No se encontraron usuarios en la base de datos.');
       }
+
       return users;
     } catch (error) {
       throw new Error(`Error al obtener los usuarios: ${error.message}`);
+    }
+  }
+
+  async getUserById(id = '') {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new Error('ID no es válido');
+      }
+      const user = await User.findOne({ _id: id }).select('-password -token');
+
+      if (!user) {
+        throw new Error('Usuario no encontrado');
+      }
+      return user;
+    } catch (error) {
+      throw new Error(`Error al obtener el usuario: ${error.message}`);
+    }
+  }
+
+  async updateUserById(id = '', updateData = {}) {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new Error('ID no valido');
+      }
+
+      const updateUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select('-token');
+
+      if (!updateUser) {
+        throw new Error('Usuario no encontrado');
+      }
+
+      return updateUser;
+    } catch (error) {
+      console.error('Error al actualizar el usuario:', error.message);
+      throw error;
     }
   }
 }
