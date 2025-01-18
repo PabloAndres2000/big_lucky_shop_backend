@@ -117,6 +117,80 @@ class UserService {
       throw error;
     }
   }
+
+  async exportAllUsersByExcel(redisClient, progressKey) {
+    const pageSize = 100;
+    const allUsersData = [];
+    console.time('Tiempo total de ejecución');
+
+    try {
+      const totalUsers = await User.countDocuments();
+      await redisClient.set(
+        progressKey,
+        JSON.stringify({ progress: 0, status: 'processing' })
+      );
+
+      const cursor = User.find({})
+        .select('name last_name email rol is_active')
+        .batchSize(pageSize)
+        .lean()
+        .cursor();
+
+      let processedUsers = 0;
+
+      // Función auxiliar para procesar un usuario
+      const processUser = (user) => ({
+        Nombre: user.name,
+        Apellido: user.last_name,
+        Correo: user.email,
+        Rol: user.rol,
+        Estado: user.is_active,
+      });
+
+      // Función para agregar un delay (si lo necesitas)
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // Iterar sobre el cursor y procesar usuarios
+      for (
+        let user = await cursor.next();
+        user != null;
+        user = await cursor.next()
+      ) {
+        console.log('Procesando usuario:', user);
+
+        allUsersData.push(processUser(user));
+        processedUsers++;
+
+        // Actualizar el progreso en Redis en función de los usuarios procesados
+        const progress = Math.round((processedUsers / totalUsers) * 100);
+        await redisClient.set(
+          progressKey,
+          JSON.stringify({ progress, status: 'processing' })
+        );
+
+        // Agregar el delay de 1 minuto (si lo deseas)
+        await delay(1); // 1 minuto de retraso
+      }
+
+      // Marcar como completado en Redis
+      await redisClient.set(
+        progressKey,
+        JSON.stringify({ progress: 100, status: 'completed' })
+      );
+
+      console.log('Datos generados:', allUsersData);
+    } catch (error) {
+      console.error('Error al procesar los usuarios:', error);
+      await redisClient.set(
+        progressKey,
+        JSON.stringify({ progress: 0, status: 'error' })
+      );
+    } finally {
+      console.timeEnd('Tiempo total de ejecución');
+    }
+
+    return allUsersData;
+  }
 }
 
 module.exports = new UserService();

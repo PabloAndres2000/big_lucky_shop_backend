@@ -1,7 +1,15 @@
 const express = require('express');
 const userService = require('../services/userService');
+const XLSX = require('xlsx');
+const { v4: uuidv4 } = require('uuid');
+const client = require('../settings/redisClient');
 
 class UserController {
+  constructor() {
+    this.exportProgress = {};
+    this.startExportUsers = this.startExportUsers.bind(this);
+  }
+
   async createUserAdmin(req, res, next) {
     try {
       const userData = req.body;
@@ -105,6 +113,120 @@ class UserController {
     } else {
       res.status(401).json({ message: 'Token inválido o no proporcionado' });
     }
+  }
+
+  async exportAllUsersByExcel(req, res, next) {
+    try {
+      const data = await userService.exportAllUsersByExcel();
+
+      if (!data || data.length === 0) {
+        return res
+          .status(404)
+          .json({ error: 'No hay usuarios para exportar.' });
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Colaboradores');
+      const excelBuffer = XLSX.write(workbook, {
+        type: 'buffer',
+        bookType: 'xlsx',
+      });
+
+      // Configura los encabezados de la respuesta
+      res.setHeader('Content-Disposition', 'attachment; filename=este.xlsx');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+
+      // Envía el archivo al cliente
+      res.send(excelBuffer);
+    } catch (error) {
+      console.error('Error en exportUsersToExcel:', error.message);
+      res.status(500).json({ error: 'Error al exportar usuarios a Excel.' });
+      next(error);
+    }
+  }
+
+  async startExportUsers(req, res) {
+    const progressKey = 'export_progress';
+
+    try {
+      if (!client.isOpen) {
+        console.log('Reintentando conectar a Redis...');
+        await connectRedis();
+      }
+
+      // Inicializar el progreso en Redis
+      await client.set(
+        progressKey,
+        JSON.stringify({ progress: 0, status: 'pending' })
+      );
+
+      // Llamada al servicio para exportar usuarios
+      const data = await userService.exportAllUsersByExcel(client, progressKey);
+
+      // Generación del archivo Excel
+      const excelBuffer = this.generateExcelFile(data);
+      console.log('Buffer generado', excelBuffer.length);
+
+      // Marcar el progreso como completado en Redis
+      await client.set(
+        progressKey,
+        JSON.stringify({
+          progress: 100,
+          status: 'completed',
+          fileAvailable: true,
+        })
+      );
+
+      // Enviar el archivo Excel al cliente
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename=exported_users.xlsx'
+      );
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.end(excelBuffer);
+    } catch (err) {
+      console.error('Error en exportUsersToExcel:', err);
+
+      await client.set(
+        progressKey,
+        JSON.stringify({ progress: 0, status: 'error' })
+      );
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error en la exportación' });
+      }
+    }
+  }
+
+  async getExportProgress(req, res) {
+    const progressKey = 'export_progress';
+
+    try {
+      const progressData = await client.get(progressKey);
+
+      if (progressData) {
+        res.status(200).json(JSON.parse(progressData));
+      } else {
+        res.status(404).json({ message: 'No hay exportación en curso.' });
+      }
+    } catch (err) {
+      console.error('Error al obtener el progreso:', err);
+      res.status(500).json({ error: 'Error al obtener el progreso' });
+    }
+  }
+
+  generateExcelFile(data) {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Colaboradores');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 }
 

@@ -1,0 +1,43 @@
+version: '3.8'
+services:
+  backend:
+    build: .
+    ports:
+      - '4201:4201'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm start
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - app_network
+
+  mongo:
+    image: mongo:5.0
+    container_name: mongo
+    ports:
+      - '27017:27017'
+    networks:
+      - app_network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=adminpassword
+    command: ['mongod', '--auth']
+
+  redis:
+    image: redis:7.0
+    container_name: redis
+    ports:
+      - '6379:6379'
+    command: ['redis-server', '--appendonly', 'yes']
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge

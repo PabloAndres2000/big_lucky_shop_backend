@@ -1,32 +1,21 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const bodyparser = require('body-parser');
+const bodyParser = require('body-parser');
+const connectDB = require('./settings/mongodb');
 const errorHandler = require('./middlewares/errorHandler');
+const userRoutes = require('./routes/userRoute');
+require('dotenv').config();
 
 const app = express();
-const port = process.env.port || 4201;
+const port = process.env.PORT || 4201;
 
-// const clientRouter = require('./routes/clientRoute');
-const userRoutes = require('./routes/userRoute');
+// Conectar a MongoDB
+connectDB();
 
-app.use(bodyparser.urlencoded({ limit: '50mb', extended: true }));
-app.use(bodyparser.json({ limit: '50mb', extended: true }));
+// Middleware
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(bodyParser.json({ limit: '50mb', extended: true }));
 
-// Conexión a MongoDB y arranque del servidor
-mongoose
-  .connect('mongodb://localhost:27017/big_lucky_shop_db', {})
-  .then(() => {
-    console.log('Conectado a MongoDB');
-
-    // Solo arrancar el servidor si la conexión a la base de datos es exitosa
-    app.listen(port, () => {
-      console.log(`Backend corriendo en el puerto ${port}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Error al conectar a MongoDB:', err);
-  });
-
+// Configuración de CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header(
@@ -38,8 +27,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Prefijo generalizado para la API
-app.use('/api', [userRoutes]);
+// Rutas
+app.use('/api', userRoutes);
 
+// Middleware de manejo de errores
 app.use(errorHandler);
-module.exports = app;
+
+// Arrancar el servidor
+app.listen(port, () => {
+  console.log(`Servidor corriendo en http://localhost:${port}`);
+});
